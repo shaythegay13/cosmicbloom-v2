@@ -169,3 +169,8 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+
+# This URP template icon is stored as a normal blob, not a Git LFS pointer.
+# The *.png LFS rule above makes a clean checkout look modified and would
+# replace the image with a pointer on the next add. Keep the committed bytes.
+Assets/TutorialInfo/Icons/URP.png -filter -diff -merge
