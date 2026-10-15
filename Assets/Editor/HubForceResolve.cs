@@ -6,8 +6,8 @@
       [InitializeOnLoad]
       public static class HubForceResolve
       {
-          private const string k_ScriptPath = "Assets\\Editor\\HubForceResolve.cs";
-          private const string k_EditorFolderPath = "Assets\\Editor";
+          private const string k_ScriptPath = "Assets/Editor/HubForceResolve.cs";
+          private const string k_EditorFolderPath = "Assets/Editor";
           private const string k_StateKey = "Hub.ForceResolve.State";
 
           static HubForceResolve()
