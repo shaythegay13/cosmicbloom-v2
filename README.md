@@ -1,6 +1,6 @@
 # Cosmic Bloom
 
-Cosmic Bloom is Shay Bouchles’s second iteration of a farming game. This repository is that iteration: a Unity 6 project named **Cosmic Bloom**, created from Unity’s Universal Render Pipeline (URP) empty template. It does not yet contain gameplay.
+Cosmic Bloom is Shay Bouchles’s second iteration of a farming game. This repository is that iteration: a Unity 6 project named **Cosmic Bloom**, created from Unity’s Universal Render Pipeline (URP) empty template. It now contains the design document and the Unity starter kit copied from [cosmicbloom-v1](https://github.com/shaythegay13/cosmicbloom-v1) branch `claude/session-q6x9es` (commit `7ae3077`). Play mode still runs the empty sample scene. No object in that scene calls the starter kit.
 
 The playable game is the first iteration, [cosmicbloom-v1](https://github.com/shaythegay13/cosmicbloom-v1). In that repository the product is **Farm & Give** (npm package `farm-and-give`, Capacitor app id `com.farmandgive.app`). This README describes what is in each repository after reading the code. It does not add features that are not implemented.
 
@@ -14,7 +14,7 @@ The only scene enabled for builds is `Assets/Scenes/SampleScene.unity`. That sce
 - a Directional Light
 - a Global Volume using `Assets/Settings/SampleSceneProfile.asset`
 
-There is no player, crop, inventory, save file, network client, or game-specific script. The C# in the repository is the URP template readme (`Assets/TutorialInfo`) plus `Assets/Editor/HubForceResolve.cs`, an editor script that resolves packages once and then deletes itself.
+That scene has no player object, crop object, inventory object, or network client. Game-specific C# is under `Assets/Scripts`, and the content database is under `Assets/Resources/GameData`. The scene does not reference either. The other C# is the URP template readme (`Assets/TutorialInfo`) plus `Assets/Editor/HubForceResolve.cs`, an editor script that resolves packages once and then deletes itself.
 
 `Assets/InputSystem_Actions.inputactions` is the Input System asset shipped with the template. Editor Build Settings point the project at it. Nothing in the sample scene reads it. The asset defines two maps:
 
@@ -27,7 +27,7 @@ Active input handling is the new Input System (`activeInputHandler: 1`). Color s
 
 ## How it plays
 
-Pressing Play in the Unity Editor runs `SampleScene`. The view is the empty URP scene: a camera, a light, and a post-processing volume. There is no objective, control scheme wired to a character, or win condition in this repository.
+Pressing Play in the Unity Editor runs `SampleScene`. The view is the empty URP scene: a camera, a light, and a post-processing volume. There is no objective, control scheme wired to a character, or win condition in this repository. `SampleScene` has no `TimeManager` and no `SaveManager`. No script in the repository calls `GameDatabase.LoadAll()`.
 
 `HubForceResolve` does not run in a player build. It runs in the Editor, calls the Package Manager resolve API on the first idle pass, and on the next idle pass deletes its own asset. Its asset paths use forward slashes so that delete works with `AssetDatabase` on Windows, macOS, and Linux.
 
@@ -38,6 +38,7 @@ Pressing Play in the Unity Editor runs `SampleScene`. The view is the empty URP 
 | Engine | Unity 6000.5.1f1 |
 | Render pipeline | Universal Render Pipeline 17.5.0 |
 | Input | Input System 1.19.0, template action asset only |
+| JSON | Newtonsoft Json through `com.unity.nuget.newtonsoft-json` 3.2.2. The starter kit calls `Newtonsoft.Json`. The lockfile already resolved 3.2.2 for AI Assistant and AI Inference; the manifest now depends on it directly |
 | UI package | uGUI 2.5.0, declared but unused by the scene |
 | IDE support | Visual Studio Editor 2.0.26, JetBrains Rider Editor 3.0.38, `.vsconfig` workload `Microsoft.VisualStudio.Workload.ManagedGame` |
 | Solution | `Cosmic Bloom.slnx`, which points at generated `Assembly-CSharp.csproj` and `Assembly-CSharp-Editor.csproj` files. Those projects are gitignored and appear after the Editor generates them. |
@@ -60,11 +61,14 @@ There is no `package.json`, test suite, or player-build script in this repositor
 ## Architecture
 
 ```
+COSMIC_BLOOM_GDD.md              Design document at the repo root (Unity does not import it)
 Assets/
   Editor/HubForceResolve.cs     Editor-only package resolve, then self-delete
   InputSystem_Actions.inputactions
   Readme.asset                   In-Editor “URP Empty Template” page
+  Resources/GameData/            Content database: regions, crops, npcs, quests, animals, tools
   Scenes/SampleScene.unity       The only enabled scene
+  Scripts/                       Starter kit: Config, Core, Data, Farming, Net, Save
   Settings/                      PC and Mobile URP assets, renderer data, volume profiles
   TutorialInfo/                  Readme ScriptableObject, custom editor, template icon
 Packages/manifest.json
@@ -77,14 +81,50 @@ Text serialization is forced (`m_SerializationMode: 2` in Editor Settings). Unit
 
 The template icon `Assets/TutorialInfo/Icons/URP.png` is a normal Git blob. `.gitattributes` otherwise marks `*.png` for Git LFS. That file is excluded from the LFS filter so a checkout does not show it as modified and a later add does not replace the image with an LFS pointer.
 
+## Design and starter kit
+
+`COSMIC_BLOOM_GDD.md` is the design document **Cosmic Bloom: Starlight Rewilding**, copied byte for byte from v1. It describes a cozy mobile farming game on Unity 6 2D URP: rewilding, soil health, day/night crops, five regions, and a free Act 1 plus a one-time `cb_full_unlock`. The document’s own paths still say `unity/GameData/*.json` and `unity/Scripts/`. In this repository those files are `Assets/Resources/GameData/*.json` and `Assets/Scripts/`.
+
+`GameDatabase.LoadAll()` loads each file with `Resources.Load<TextAsset>` from `GameData/<name>` (no extension). That is the path the scripts were written for, so the JSON lives in `Assets/Resources/GameData/` rather than `StreamingAssets`. A count after deserializing into the types in `Definitions.cs`:
+
+| File | Root key | Records |
+| --- | --- | --- |
+| `regions.json` | `regions` | 5: `starlight_vale` (act 1), `sun_garden`, `moon_garden`, `star_garden`, `nebula_garden` (each act 3) |
+| `crops.json` | `crops` | 26, including quest-only `heartseed` in `nebula_garden` |
+| `npcs.json` | `npcs` | 50, 10 in each region |
+| `quests.json` | `quests` | 60, 15 in each of acts 1–4 |
+| `animals.json` | `animals` | 15: 6 livestock, 6 pets, 3 helpers |
+| `tools.json` | `tools` | 10: 3 till, 3 water, 2 harvest, 1 clear, 1 fish |
+
+Ids are unique. Every crop and NPC `region` is one of the five region ids. NPC `questIds`, quest `giver`, and quest `unlocks` point at ids that exist in these files, or are empty.
+
+The C# matches the v1 sources except one line. `FarmingSystem.cs` adds `using System.Collections.Generic;` so `Dictionary.GetValueOrDefault` resolves. That method is an extension in that namespace. Unity’s API compatibility level here is .NET Standard 2.1 (`apiCompatibilityLevel: 6`), which does not import the namespace for you. `GameDatabase.cs` already had the using.
+
+| Script | What the file implements |
+| --- | --- |
+| `Config/GameConfig.cs` | API base URL, product id `cb_full_unlock`, free act limit 1, `CharityEnabled = false`, local autosave 30s, server sync 60s |
+| `Core/GameState.cs` | Schema-2 `SaveSnapshot` (default region `starlight_vale`) plus coin and XP rules |
+| `Core/TimeManager.cs` | Day/night `MonoBehaviour`. Default day length is 24 real minutes. `AmbientIntensity()` returns a 0.18–1 curve for a URP light |
+| `Data/Definitions.cs` | Newtonsoft models for the JSON |
+| `Data/GameDatabase.cs` | Resource loader and id lookups. Nothing in the repo calls `LoadAll()` |
+| `Farming/FarmingSystem.cs` | Till, plant, water, harvest, soil health, and real-time fast-forward. Watering gates each stage |
+| `Net/ApiClient.cs` | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/game/save`, `GET /api/game/load`. Stores a JWT in `PlayerPrefs` under `cb_jwt` |
+| `Save/SaveManager.cs` | Writes `cosmicbloom_save.json` under `Application.persistentDataPath`, debounces local writes, syncs when a token is present, and fast-forwards on resume |
+
+`GameConfig.ApiBaseUrl` is `http://localhost:5000` when `UNITY_EDITOR` or `DEVELOPMENT_BUILD` is set, and `https://YOUR-RENDER-APP.onrender.com` otherwise. The second host is the placeholder string from v1. This repository has no server and no `.env` entries for it. `CharityEnabled` stays `false`. No RevenueCat SDK is installed; the product id is only a constant.
+
+`GameDatabase.cs` still mentions `unity/README.md`. That v1 file was an import guide for a separate Unity project (`C:\Projects\CosmicBloom`) and is not part of this port. This repository is the Unity project.
+
 ## Setup
 
 1. Install **Unity 6000.5.1f1** (changeset `0d9463e84828`) with Unity Hub, including the platform modules you want to build. A different editor version will offer to upgrade the project.
-2. Open this folder as a Unity project. The Editor imports packages from `Packages/manifest.json` using `Packages/packages-lock.json`.
+2. Open this folder as a Unity project. The Editor imports packages from `Packages/manifest.json` using `Packages/packages-lock.json`, including `com.unity.nuget.newtonsoft-json` 3.2.2.
 3. Open `Assets/Scenes/SampleScene.unity`.
 4. Enter Play mode.
 
-No environment variables are required. This project does not load a `.env` file. `.env` is gitignored. `.env.example` is tracked and currently lists no names, because nothing in the project reads one. If a variable is added later, put the name in `.env.example` with an empty value and keep the real value local.
+No environment variables are required. This project does not load a `.env` file. `.env` is gitignored. `.env.example` is tracked and currently lists no names, because nothing in the project reads one. API hosts are the constants in `GameConfig.cs`. If a variable is added later, put the name in `.env.example` with an empty value and keep the real value local.
+
+The starter kit runs only after a scene has a GameObject with `TimeManager` and `SaveManager`, and after something calls `GameDatabase.LoadAll()` before farming lookups. This repository does not add that object or that call. `SaveManager.Awake` reads the local snapshot, builds `GameState` and `FarmingSystem`, and fast-forwards plots. It does not load `Resources/GameData`.
 
 There is no build script in the repository. A player build is made from the Unity Editor’s build window. The enabled scene list contains only `Assets/Scenes/SampleScene.unity`.
 
@@ -92,18 +132,20 @@ There is no build script in the repository. A player build is made from the Unit
 
 This repository has no screenshots. Unity 6000.5.1f1 was launched in batch mode against this project and exited before it imported assets or entered Play Mode, because the machine had no Unity Editor license. No player build or Play Mode capture exists.
 
+The starter kit was not compiled by the Unity Editor either. The machine used for this port has no Unity Editor license. The scripts were compiled with the .NET 8 SDK as a `netstandard2.1` class library, language version 9.0, Newtonsoft.Json 13.0.3, and local stubs for the `UnityEngine` and `UnityEngine.Networking` types those files use. That compile was run with `UNITY_EDITOR` defined and again without it. Each JSON file was then deserialized with Newtonsoft into the `CosmicBloom.Data` types, and parsed again with Python’s `json` module.
+
 ## Comparison with v1
 
-Source: the public repository [shaythegay13/cosmicbloom-v1](https://github.com/shaythegay13/cosmicbloom-v1), default branch `main`, read from the files cited below. v1’s own README describes the product as “Farm & Give — Rewind the Planet.”
+Source for the v1 column: the public repository [shaythegay13/cosmicbloom-v1](https://github.com/shaythegay13/cosmicbloom-v1), default branch `main`, read from the files cited below. v1’s own README describes the product as “Farm & Give — Rewind the Planet.” The design document and starter kit in this repository come from that repo’s branch `claude/session-q6x9es` at `7ae3077`, not from `main`.
 
 | | v1 (`cosmicbloom-v1`) | v2 (this repository) |
 | --- | --- | --- |
 | Product name in code | Farm & Give (`client/index.html` title, `capacitor.config.json` `appName`) | Cosmic Bloom (`ProjectSettings` `productName`) |
 | Package / app id | npm `farm-and-give` 1.0.0; Capacitor `com.farmandgive.app`; Android package `com.farmandgive.app` | Unity bundle version 0.1.0; company `DefaultCompany`; no application identifier set |
-| What you can play | A 2D farm in the browser, with Capacitor `ios/` and `android/` projects | The empty URP sample scene |
-| Client | Vanilla JavaScript ES modules and an HTML5 canvas, built with Vite (`client/`, `vite.config.js`) | Unity scene; no game scripts |
-| Server | Node.js (`.nvmrc` is `20`) and Express, MongoDB via Mongoose (`server/`) | None |
-| Tests | Vitest unit tests and a supertest API test; GitHub Actions in `.github/workflows/ci.yml` | None |
+| What you can play | A 2D farm in the browser, with Capacitor `ios/` and `android/` projects | The empty URP sample scene. The design document and starter kit are in the tree and are not attached to the scene |
+| Client | Vanilla JavaScript ES modules and an HTML5 canvas, built with Vite (`client/`, `vite.config.js`) | Unity 6 project, plus `Assets/Scripts` and `Assets/Resources/GameData` |
+| Server | Node.js (`.nvmrc` is `20`) and Express, MongoDB via Mongoose (`server/`) | None in this repo. `ApiClient` calls v1’s `/api/auth` and `/api/game` routes when `GameConfig.ApiBaseUrl` answers |
+| Tests | Vitest unit tests and a supertest API test; GitHub Actions in `.github/workflows/ci.yml` | None committed in this repository |
 | License file | No `LICENSE` file. `package.json` and `README.md` say MIT | No license file |
 
 ### How v1 plays
@@ -142,7 +184,8 @@ Sprite atlases for the seven biomes and a core atlas live in `client/public/atla
 
 From the git history of **this** repository (`git log`):
 
-- **Shay Bouchles** — the only commit, `09011d7`, 2026-07-03, “Initial check-in.”
+- **Shay Bouchles** — `09011d7`, 2026-07-03, “Initial check-in.”
+- **Cursor Agent** — port of `COSMIC_BLOOM_GDD.md`, the content JSON, and the starter-kit scripts from cosmicbloom-v1 `claude/session-q6x9es` at `7ae3077`.
 
 From the public history of **cosmicbloom-v1**:
 
